@@ -85,10 +85,19 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 			m.suggestions = nil
 		} else {
 			if m.input.Value() != "" {
-				m.messages = append(m.messages, "👤 You: "+m.input.Value())
-				reply := Reply(m.input.Value())
-				m.messages = append(m.messages, "🤖 Bot: "+reply)
-				m.input.SetValue("")
+
+				userInput := m.input.Value()
+				if strings.HasPrefix(userInput, "/") {
+					commandStr := strings.TrimPrefix(userInput, "/")
+					result := ExecuteCommand(commandStr)
+					m.messages = append(m.messages, "🤖 Bot: "+result)
+				} else {
+
+					m.messages = append(m.messages, "👤 You: "+m.input.Value())
+					reply := Reply(m.input.Value())
+					m.messages = append(m.messages, "🤖 Bot: "+reply)
+					m.input.SetValue("")
+				}
 			}
 		}
 	case "esc":
