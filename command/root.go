@@ -1,6 +1,7 @@
 package command
 
 import (
+	"cli/config"
 	"cli/ui"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ var rootCmd = &cobra.Command{
 	Short: "Simple CLI chat app",
 
 	Run: func(cmd *cobra.Command, args []string) {
+		config.LoadConfig()
 		ui.Poster()
 		StartChatUI()
 	},

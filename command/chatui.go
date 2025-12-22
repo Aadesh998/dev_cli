@@ -1,6 +1,8 @@
 package command
 
 import (
+	"cli/config"
+	"cli/llm/claude"
 	"cli/utils"
 	"fmt"
 	"os"
@@ -19,6 +21,8 @@ type model struct {
 	selectedSuggestion int
 	suggestionsActive  bool
 	Command            tea.Cmd
+	configMissing      bool
+	waitingForKey      bool
 }
 
 func initialModel() model {
@@ -27,9 +31,29 @@ func initialModel() model {
 	ti.Placeholder = "Type your message here"
 	ti.Width = 60
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#fff"))
+
+	configMissing := !config.ConfigExists()
+
+	messages := []string{
+		"Tips for getting started:",
+		"1. Ask any question to edit, generate, debug and run commands.",
+		"2. Be specific for the best results.",
+		"3. type /switch_model <MODEL_NAME>",
+	}
+
+	if configMissing {
+		messages = []string{
+			"⚠ Configuration not found.",
+			"Please enter your Claude API key to continue:",
+		}
+		ti.Placeholder = "Paste your Claude API key here"
+	}
+
 	return model{
-		messages: []string{"Tips for getting started:", "1. Ask any question to edit, generate, debug and run commands.", "2. Be specific for the best results.\n"},
-		input:    ti,
+		messages:      messages,
+		input:         ti,
+		configMissing: configMissing,
+		waitingForKey: configMissing,
 	}
 }
 
@@ -79,6 +103,39 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 			m.selectedSuggestion = utils.Min(len(m.suggestions)-1, m.selectedSuggestion+1)
 		}
 	case "enter", "tab":
+		if m.waitingForKey {
+			key := strings.TrimSpace(m.input.Value())
+			if key == "" {
+				m.messages = append(m.messages, "API key cannot be empty.")
+				return m, nil
+			}
+
+			if err := config.SaveClaudeKey(key); err != nil {
+				m.messages = append(m.messages, "Failed to save config.")
+				return m, nil
+			}
+			if err := config.LoadConfig(); err != nil {
+				fmt.Println("Config error:", err)
+				os.Exit(1)
+			}
+
+			m.messages = append(m.messages, "API key saved successfully.")
+			messages := []string{
+				"\n",
+				"Tips for getting started:",
+				"1. Ask any question to edit, generate, debug and run commands.",
+				"2. Be specific for the best results.",
+				"3. type /switch_model <MODEL_NAME>",
+			}
+
+			m.messages = append(m.messages, messages...)
+			m.waitingForKey = false
+			m.configMissing = false
+			m.input.SetValue("")
+			m.input.Placeholder = "Type your message here"
+			return m, nil
+		}
+
 		if m.suggestionsActive && len(m.suggestions) > 0 {
 			m.input.SetValue("/" + m.suggestions[m.selectedSuggestion].Name)
 			m.suggestionsActive = false
@@ -90,12 +147,11 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 				if strings.HasPrefix(userInput, "/") {
 					commandStr := strings.TrimPrefix(userInput, "/")
 					result := ExecuteCommand(commandStr)
-					m.messages = append(m.messages, "🤖 Bot: "+result)
+					m.messages = append(m.messages, "AI: "+result)
 				} else {
-
-					m.messages = append(m.messages, "👤 You: "+m.input.Value())
-					reply := Reply(m.input.Value())
-					m.messages = append(m.messages, "🤖 Bot: "+reply)
+					m.messages = append(m.messages, "You: "+m.input.Value())
+					reply := claude.ClaudeModelReply(m.input.Value())
+					m.messages = append(m.messages, "AI: "+reply)
 					m.input.SetValue("")
 				}
 			}
@@ -106,10 +162,6 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 		m.input.SetValue("")
 	}
 	return m, nil
-}
-
-func Reply(msg string) string {
-	return msg
 }
 
 func (m model) View() string {
