@@ -11,7 +11,7 @@ import (
 
 func ClaudeModelReply(input string) string {
 	client := anthropic.NewClient(
-		option.WithAPIKey(config.LLMModel),
+		option.WithAPIKey(config.LlmClient.ModelAPI),
 	)
 
 	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{

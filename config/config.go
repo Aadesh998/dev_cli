@@ -9,7 +9,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-var LLMModel string
+type LLMModel struct {
+	ModelName string
+	ModelAPI  string
+}
+
+var LlmClient LLMModel
 
 func ConfigExists() bool {
 	configPath := utils.GetDirConfigPath()
@@ -33,15 +38,21 @@ func LoadConfig() error {
 		return err
 	}
 
-	LLMModel = viper.GetString("claude_api")
-	if LLMModel == "" {
+	LlmClient.ModelAPI = viper.GetString("apikey")
+	if LlmClient.ModelAPI == "" {
+		return fmt.Errorf("claude_api is missing in config")
+	}
+
+	LlmClient.ModelName = viper.GetString("model")
+	if LlmClient.ModelName == "" {
 		return fmt.Errorf("claude_api is missing in config")
 	}
 
 	return nil
 }
 
-func SaveClaudeKey(key string) error {
+func SaveClaudeKey(model, key string) error {
+	fmt.Printf("Model Name:= %s", model)
 	configPath := utils.GetDirConfigPath()
 	configDir := filepath.Join(configPath, "dev_cli")
 
@@ -49,6 +60,7 @@ func SaveClaudeKey(key string) error {
 		return err
 	}
 
-	viper.Set("claude_api", key)
+	viper.Set("apikey", key)
+	viper.Set("model", model)
 	return viper.SafeWriteConfigAs(filepath.Join(configDir, "config.yaml"))
 }

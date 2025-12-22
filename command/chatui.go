@@ -13,50 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type model struct {
-	messages           []string
-	input              textinput.Model
-	ExitActive         bool
-	suggestions        []Command
-	selectedSuggestion int
-	suggestionsActive  bool
-	Command            tea.Cmd
-	configMissing      bool
-	waitingForKey      bool
-}
-
-func initialModel() model {
-	ti := textinput.New()
-	ti.Focus()
-	ti.Placeholder = "Type your message here"
-	ti.Width = 60
-	ti.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#fff"))
-
-	configMissing := !config.ConfigExists()
-
-	messages := []string{
-		"Tips for getting started:",
-		"1. Ask any question to edit, generate, debug and run commands.",
-		"2. Be specific for the best results.",
-		"3. type /switch_model <MODEL_NAME>",
-	}
-
-	if configMissing {
-		messages = []string{
-			"⚠ Configuration not found.",
-			"Please enter your Claude API key to continue:",
-		}
-		ti.Placeholder = "Paste your Claude API key here"
-	}
-
-	return model{
-		messages:      messages,
-		input:         ti,
-		configMissing: configMissing,
-		waitingForKey: configMissing,
-	}
-}
-
 func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
@@ -75,8 +31,11 @@ func (m *model) updateSuggestions() {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	m.updateSuggestions()
+
+	if !m.showChoices {
+		m.input, cmd = m.input.Update(msg)
+		m.updateSuggestions()
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -94,15 +53,39 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 		m.messages = append(m.messages, "⚠ Press Ctrl+C again to exit.")
 		m.ExitActive = true
 		return m, nil
+
 	case "up":
-		if m.suggestionsActive {
+		if m.showChoices {
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		} else if m.suggestionsActive {
 			m.selectedSuggestion = utils.Max(0, m.selectedSuggestion-1)
 		}
+
 	case "down":
-		if m.suggestionsActive {
+		if m.showChoices {
+			if m.cursor < len(m.choices)-1 {
+				m.cursor++
+			}
+		} else if m.suggestionsActive {
 			m.selectedSuggestion = utils.Min(len(m.suggestions)-1, m.selectedSuggestion+1)
 		}
+
 	case "enter", "tab":
+		if m.showChoices {
+			selectedModel := m.choices[m.cursor]
+			m.messages = append(m.messages, fmt.Sprintf("Selected model: %s", selectedModel))
+			m.messages = append(m.messages, "Please enter your API key:")
+
+			m.showChoices = false
+			m.waitingForKey = true
+			m.input.Placeholder = "Enter your API key"
+			m.input.SetValue("")
+			m.input.Focus()
+			return m, nil
+		}
+
 		if m.waitingForKey {
 			key := strings.TrimSpace(m.input.Value())
 			if key == "" {
@@ -110,7 +93,7 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 				return m, nil
 			}
 
-			if err := config.SaveClaudeKey(key); err != nil {
+			if err := config.SaveClaudeKey(m.choices[m.cursor], key); err != nil {
 				m.messages = append(m.messages, "Failed to save config.")
 				return m, nil
 			}
@@ -142,7 +125,6 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 			m.suggestions = nil
 		} else {
 			if m.input.Value() != "" {
-
 				userInput := m.input.Value()
 				if strings.HasPrefix(userInput, "/") {
 					commandStr := strings.TrimPrefix(userInput, "/")
@@ -156,20 +138,60 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 				}
 			}
 		}
+
 	case "esc":
-		m.suggestionsActive = false
-		m.suggestions = nil
-		m.input.SetValue("")
+		if m.showChoices {
+			m.showChoices = false
+			m.messages = append(m.messages, "Model selection cancelled.")
+		} else {
+			m.suggestionsActive = false
+			m.suggestions = nil
+			m.input.SetValue("")
+		}
+
+	case " ":
+		if m.showChoices {
+			if _, ok := m.selected[m.cursor]; ok {
+				delete(m.selected, m.cursor)
+			} else {
+				m.selected[m.cursor] = struct{}{}
+			}
+		}
 	}
 	return m, nil
 }
 
 func (m model) View() string {
 	chatBox := strings.Join(m.messages, "\n")
-	inputBox := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		Width(60).
-		Render(m.input.View())
+
+	var choicesBox string
+	if m.showChoices {
+		var s strings.Builder
+		s.WriteString("Select a model (use ↑↓ to navigate, Enter to select, Esc to cancel):\n\n")
+		for i, choice := range m.choices {
+			cursor := " "
+			if m.cursor == i {
+				cursor = ">"
+			}
+			checked := " "
+			if _, ok := m.selected[i]; ok {
+				checked = "x"
+			}
+			s.WriteString(fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice))
+		}
+		choicesBox = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			Width(60).
+			Render(s.String())
+	}
+
+	var inputBox string
+	if !m.showChoices {
+		inputBox = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			Width(60).
+			Render(m.input.View())
+	}
 
 	var suggestionBox string
 	if m.suggestionsActive && len(m.suggestions) > 0 {
@@ -188,12 +210,24 @@ func (m model) View() string {
 			Render(s.String())
 	}
 
-	return fmt.Sprintf(
-		"%s\n\nType your message & press Enter:\n%s\n%s",
-		chatBox,
-		inputBox,
-		suggestionBox,
-	)
+	var output strings.Builder
+	output.WriteString(chatBox)
+	output.WriteString("\n\n")
+
+	if choicesBox != "" {
+		output.WriteString(choicesBox)
+		output.WriteString("\n")
+	} else {
+		output.WriteString("Type your message & press Enter:\n")
+		output.WriteString(inputBox)
+
+		if suggestionBox != "" {
+			output.WriteString("\n")
+			output.WriteString(suggestionBox)
+		}
+	}
+
+	return output.String()
 }
 
 func StartChatUI() {
