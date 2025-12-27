@@ -1,10 +1,14 @@
 package command
 
 import (
+	"cli/chat"
 	"cli/config"
 	"cli/llm/claude"
+	"cli/llm/kimik2"
+	"cli/llm/openai"
 	"cli/utils"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -93,7 +97,7 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 				return m, nil
 			}
 
-			if err := config.SaveClaudeKey(m.choices[m.cursor], key); err != nil {
+			if err := config.SaveApiKey(m.choices[m.cursor], key); err != nil {
 				m.messages = append(m.messages, "Failed to save config.")
 				return m, nil
 			}
@@ -108,7 +112,7 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 				"Tips for getting started:",
 				"1. Ask any question to edit, generate, debug and run commands.",
 				"2. Be specific for the best results.",
-				"3. type /switch_model <MODEL_NAME>",
+				"3. type /switch <MODEL_NAME> <APIKEY>",
 			}
 
 			m.messages = append(m.messages, messages...)
@@ -126,14 +130,30 @@ func handleKeyMsg(m model, msg tea.KeyMsg) (model, tea.Cmd) {
 		} else {
 			if m.input.Value() != "" {
 				userInput := m.input.Value()
-				if strings.HasPrefix(userInput, "/") {
-					commandStr := strings.TrimPrefix(userInput, "/")
+				if after, ok := strings.CutPrefix(userInput, "/"); ok {
+					commandStr := after
 					result := ExecuteCommand(commandStr)
 					m.messages = append(m.messages, "AI: "+result)
 				} else {
+					log.Printf("Model Using:- %s", config.LlmClient.ModelName)
+
 					m.messages = append(m.messages, "You: "+m.input.Value())
-					reply := claude.ClaudeModelReply(m.input.Value())
-					m.messages = append(m.messages, "AI: "+reply)
+					var provider chat.ChatProvider
+
+					switch config.LlmClient.ModelName {
+					case utils.ModelClaude:
+						provider = claude.ClaudeProvider{}
+					case utils.ModelKimik2:
+						provider = kimik2.Kimik2Provider{}
+					case utils.ModelOpenai:
+						provider = openai.OpenaiProvider{}
+					}
+					reply, err := provider.ChatProcess(m.input.Value())
+					if err != nil {
+						log.Printf("Failed to get the response from the AI: %s", err)
+					}
+
+					m.messages = append(m.messages, "AI: "+reply.Text)
 					m.input.SetValue("")
 				}
 			}

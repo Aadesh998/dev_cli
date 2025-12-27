@@ -21,20 +21,42 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var helloCmd = &cobra.Command{
-	Use:   "Hello",
-	Short: "Hello Command",
-
+var switchModelCmd = &cobra.Command{
+	Use:   "switch [model_name] [apikey]",
+	Short: "Switch model and API key",
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "Hello World")
+		modelName := args[0]
+		apikey := args[1]
+		config.SaveApiKey(modelName, apikey)
+		config.LoadConfig()
+		fmt.Fprintf(cmd.OutOrStdout(), "Model Switch Successfully")
+	},
+}
+
+var helloCmd = &cobra.Command{
+	Use:   "hello [name]",
+	Short: "Prints a greeting",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Fprintf(cmd.OutOrStdout(), "Hello World %s\n", args[0])
 	},
 }
 
 func init() {
-	log.SetOutput(os.Stderr)
+	initLogger()
 	log.SetFlags(log.Ldate | log.Lshortfile | log.Ltime)
 
 	rootCmd.AddCommand(helloCmd)
+	rootCmd.AddCommand(switchModelCmd)
+}
+
+func initLogger() {
+	file, err := os.OpenFile("app.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(file)
 }
 
 func Execute() {

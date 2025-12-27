@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"cli/chat"
 	"cli/config"
 	"context"
 	"strings"
@@ -9,7 +10,13 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-func ClaudeModelReply(input string) string {
+type ClaudeProvider struct{}
+
+type ClaudeResponse struct {
+	Reply string `json:"reply"`
+}
+
+func (c ClaudeProvider) ChatProcess(input string) (chat.GenericResponse, error) {
 	client := anthropic.NewClient(
 		option.WithAPIKey(config.LlmClient.ModelAPI),
 	)
@@ -44,5 +51,8 @@ func ClaudeModelReply(input string) string {
 	if stream.Err() != nil {
 		panic(stream.Err())
 	}
-	return completeAIMesg.String()
+	content := completeAIMesg.String()
+	return chat.GenericResponse{
+		Text: content,
+	}, nil
 }

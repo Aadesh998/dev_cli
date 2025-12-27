@@ -51,7 +51,7 @@ func LoadConfig() error {
 	return nil
 }
 
-func SaveClaudeKey(model, key string) error {
+func SaveApiKey(model, key string) error {
 	fmt.Printf("Model Name:= %s", model)
 	configPath := utils.GetDirConfigPath()
 	configDir := filepath.Join(configPath, "dev_cli")
@@ -59,6 +59,9 @@ func SaveClaudeKey(model, key string) error {
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err
 	}
+
+	config_file := filepath.Join(configDir, "config.yaml")
+	os.Remove(config_file)
 
 	viper.Set("apikey", key)
 	viper.Set("model", model)
