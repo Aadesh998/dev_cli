@@ -1,61 +1,95 @@
 package claude
 
 import (
-	"cli/internal/app/chat"
-	"cli/internal/config"
 	"context"
+	"errors"
+	"fmt"
 	"strings"
+	"time"
+
+	"cli/internal/app/chat"
+	"cli/internal/utils"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-type ClaudeProvider struct{}
-
-type ClaudeResponse struct {
-	Reply string `json:"reply"`
+type ClaudeProvider struct {
+	client  anthropic.Client
+	model   string
+	timeout time.Duration
 }
 
-// TODO: The ChatProcess function uses panic to handle errors.
-// This is not a good practice in production code.
-// Consider returning an error instead.
-func (c ClaudeProvider) ChatProcess(input string) (chat.GenericResponse, error) {
+func NewClaudeProvider(apiKey, model string) (chat.ChatProvider, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, errors.New("Claude API key is missing")
+	}
+
+	if strings.TrimSpace(model) == "" {
+		model = utils.ClaudeDefaultModel
+	}
+
 	client := anthropic.NewClient(
-		option.WithAPIKey(config.LlmClient.ModelAPI),
+		option.WithAPIKey(apiKey),
 	)
 
-	stream := client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.ModelClaudeSonnet4_5_20250929,
-		MaxTokens: 1024,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(input)),
-		},
-	})
+	return &ClaudeProvider{
+		client:  client,
+		model:   model,
+		timeout: utils.DefaultChatTimeout,
+	}, nil
+}
 
-	message := anthropic.Message{}
-	var completeAIMesg strings.Builder
+func (c *ClaudeProvider) ChatProcess(input string) (chat.GenericResponse, error) {
+	if strings.TrimSpace(input) == "" {
+		return chat.GenericResponse{}, errors.New("empty prompt")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	stream := c.client.Messages.NewStreaming(
+		ctx,
+		anthropic.MessageNewParams{
+			Model:     anthropic.Model(c.model),
+			MaxTokens: 4000,
+			Messages: []anthropic.MessageParam{
+				anthropic.NewUserMessage(
+					anthropic.NewTextBlock(input),
+				),
+			},
+		},
+	)
+
+	var (
+		buf strings.Builder
+		msg anthropic.Message
+	)
+
 	for stream.Next() {
 		event := stream.Current()
-		err := message.Accumulate(event)
-		if err != nil {
-			panic(err)
+
+		if err := msg.Accumulate(event); err != nil {
+			return chat.GenericResponse{}, fmt.Errorf("claude stream accumulate error: %w", err)
 		}
 
-		switch eventVariant := event.AsAny().(type) {
-		case anthropic.ContentBlockDeltaEvent:
-			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
-			case anthropic.TextDelta:
-				completeAIMesg.WriteString(deltaVariant.Text)
+		if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
+			if text, ok := delta.Delta.AsAny().(anthropic.TextDelta); ok {
+				buf.WriteString(text.Text)
 			}
-
 		}
 	}
 
-	if stream.Err() != nil {
-		panic(stream.Err())
+	if err := stream.Err(); err != nil {
+		return chat.GenericResponse{}, fmt.Errorf("claude stream error: %w", err)
 	}
-	content := completeAIMesg.String()
+
+	out := strings.TrimSpace(buf.String())
+	if out == "" {
+		return chat.GenericResponse{}, errors.New("empty completion response")
+	}
+
 	return chat.GenericResponse{
-		Text: content,
+		Text: out,
 	}, nil
 }

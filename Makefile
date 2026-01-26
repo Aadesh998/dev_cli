@@ -1,6 +1,7 @@
 APP_NAME=dev_cli
 BUILD_DIR := ./bin
 ENTRY=main.go
+CONFIG_FILE=/home/aadesh-kumar/.config/dev_cli
 
 WIN_EXE := $(BUILD_DIR)/$(APP_NAME).exe
 LINUX_BIN := $(BUILD_DIR)/$(APP_NAME)
@@ -23,6 +24,10 @@ build_linux:
 
 run:
 	go run $(ENTRY)
+
+remove_config:
+	@echo "Removing config file"
+	@rm -rf $(CONFIG_FILE)
 
 clean:
 	@echo "Cleaning up"

@@ -4,6 +4,7 @@ import (
 	"cli/internal/app/chat"
 	"cli/internal/command"
 	"cli/internal/config"
+	glm "cli/internal/llm/GLM"
 	"cli/internal/llm/claude"
 	"cli/internal/llm/kimik2"
 	"cli/internal/llm/openai"
@@ -144,21 +145,31 @@ func handlekeyPress(m chatModel, msg tea.KeyMsg) (chatModel, tea.Cmd) {
 
 					m.messages = append(m.messages, "You: "+m.input.Value())
 					var provider chat.ChatProvider
+					var err error
 
-					switch config.LlmClient.ModelName {
+					switch utils.ModelType(config.LlmClient.ModelName) {
 					case utils.ModelClaude:
-						provider = claude.ClaudeProvider{}
-					case utils.ModelKimik2:
-						provider = kimik2.Kimik2Provider{}
-					case utils.ModelOpenai:
-						provider = openai.OpenaiProvider{}
-					}
-					reply, err := provider.ChatProcess(m.input.Value())
-					if err != nil {
-						log.Printf("Failed to get the response from the AI: %s", err)
+						provider, err = claude.NewClaudeProvider(config.LlmClient.ModelAPI, "")
+					case utils.ModelKimiK2:
+						provider, err = kimik2.NewKimik2Provider(config.LlmClient.ModelAPI, "", "")
+					case utils.ModelOpenAI:
+						provider, err = openai.NewOpenAIProvider(config.LlmClient.ModelAPI, "", "")
+					case utils.ModelGLM:
+						provider, err = glm.NewGLMProvider(config.LlmClient.ModelAPI, "", "")
+					default:
+						err = fmt.Errorf("unknown model: %s", config.LlmClient.ModelName)
 					}
 
-					m.messages = append(m.messages, "AI: "+reply.Text)
+					if err != nil {
+						log.Printf("Failed to initialize provider: %s", err)
+						m.messages = append(m.messages, "Error: "+err.Error())
+					} else {
+						reply, err := provider.ChatProcess(m.input.Value())
+						if err != nil {
+							log.Printf("Failed to get the response from the AI: %s", err)
+						}
+						m.messages = append(m.messages, "AI: "+reply.Text)
+					}
 					m.input.SetValue("")
 				}
 			}

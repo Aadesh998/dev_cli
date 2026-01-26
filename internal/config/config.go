@@ -71,5 +71,5 @@ func SaveApiKey(model, key string) error {
 
 	viper.Set("apikey", key)
 	viper.Set("model", model)
-	return viper.WriteConfig(filepath.Join(configDir, "config.yaml"))
+	return viper.SafeWriteConfigAs(filepath.Join(configDir, "config.yaml"))
 }
