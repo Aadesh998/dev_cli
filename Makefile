@@ -1,6 +1,6 @@
 APP_NAME=dev_cli
 BUILD_DIR := ./bin
-ENTRY=main.go
+ENTRY=cmd/cli/main.go
 CONFIG_FILE=/home/aadesh-kumar/.config/dev_cli
 
 WIN_EXE := $(BUILD_DIR)/$(APP_NAME).exe
