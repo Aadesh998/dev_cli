@@ -40,6 +40,12 @@ func init() {
 	initializeLogger()
 	log.SetFlags(log.Ldate | log.Lshortfile | log.Ltime)
 
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.SetHelpCommand(&cobra.Command{
+		Use:    "no-help",
+		Hidden: true,
+	})
+
 	rootCmd.AddCommand(helloCommand)
 	rootCmd.AddCommand(switchModelCommand)
 }

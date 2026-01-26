@@ -1,6 +1,9 @@
 package ui
 
-import "fmt"
+import (
+	"cli/internal/config"
+	"fmt"
+)
 
 func Poster() {
 	fmt.Println(`
@@ -10,9 +13,9 @@ func Poster() {
 ██║  ██║██╔══╝  ╚██╗ ██╔╝    ██║      ██║     ██║
 ██████╔╝███████╗ ╚████╔╝     ╚██████╗ ███████╗██║
 ╚═════╝ ╚══════╝  ╚═══╝       ╚═════╝ ╚══════╝╚═╝
-
-        DEV CLI
-  Simple Developer CLI Tool
- (Press Ctrl + C to exit)
 `)
+
+	fmt.Println("🚀 Welcome to DEV CLI")
+	fmt.Printf("🔹 Current Model : %s\n", config.LlmClient.ModelName)
+	fmt.Println("\n(Press Ctrl + C to exit)")
 }

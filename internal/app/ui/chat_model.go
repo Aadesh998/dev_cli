@@ -25,13 +25,15 @@ type chatModel struct {
 	cursor             int
 	selected           map[int]struct{}
 	showChoices        bool
+	width              int
+	height             int
 }
 
 func newChatModel() chatModel {
 	ti := textinput.New()
 	ti.Focus()
 	ti.Placeholder = "Type your message here"
-	ti.Width = 60
+	ti.Width = 1000
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#fff"))
 
 	configMissing := !config.ConfigExists()
@@ -49,11 +51,12 @@ func newChatModel() chatModel {
 			"claude",
 			"kimik2",
 			"openAI",
+			"GLM",
 		}
 		m.selected = make(map[int]struct{})
 		m.showChoices = true
 	} else {
-		m.messages = []string{"1. Ask questions", "2. Be specific", "3. /switch_model <NAME>"}
+		m.messages = []string{"1. Ask questions", "2. Be specific", "3. /switch_model <MODEL_NAME> <API_KEY>"}
 	}
 	return m
 }

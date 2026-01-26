@@ -48,6 +48,10 @@ func (m chatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.input.Width = msg.Width - 10
 	case tea.KeyMsg:
 		m, cmd = handlekeyPress(m, msg)
 	}
@@ -217,7 +221,7 @@ func (m chatModel) View() string {
 		}
 		choicesBox = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			Width(60).
+			Width(utils.Max(40, m.width-4)).
 			Render(s.String())
 	}
 
@@ -225,7 +229,7 @@ func (m chatModel) View() string {
 	if !m.showChoices {
 		inputBox = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			Width(60).
+			Width(utils.Max(40, m.width-4)).
 			Render(m.input.View())
 	}
 
@@ -242,7 +246,7 @@ func (m chatModel) View() string {
 		}
 		suggestionBox = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			Width(60).
+			Width(utils.Max(40, m.width-4)).
 			Render(s.String())
 	}
 
